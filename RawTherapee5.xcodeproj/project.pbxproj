@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXAggregateTarget section */
@@ -49,12 +49,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		31FDC3AD30132DC000F3A27B /* RawTherapee Source */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = "RawTherapee Source";
-			path = RawTherapee5/rawtherapee;
-			sourceTree = "<group>";
-		};
+		31FDC3AD30132DC000F3A27B /* RawTherapee Source */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); name = "RawTherapee Source"; path = RawTherapee5/rawtherapee; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -140,6 +135,7 @@
 				};
 			};
 			buildConfigurationList = 31FDC3A630132DC000F3A27B /* Build configuration list for PBXProject "RawTherapee5" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -148,7 +144,6 @@
 			);
 			mainGroup = 31FDC3A230132DC000F3A27B;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = 31FDC3AC30132DC000F3A27B /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
