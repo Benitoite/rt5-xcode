@@ -127,7 +127,7 @@ minimum_system_version="$(
             -c "Print :LSMinimumSystemVersion" \
             "${application}/Contents/Info.plist" \
             2>/dev/null ||
-        printf '%s' "${MACOSX_DEPLOYMENT_TARGET:-26.0}"
+        printf '%s' "${MACOSX_DEPLOYMENT_TARGET:-12.0}"
 )"
 if [[ "$architectures" == *" "* ]]; then
     architecture_label=Universal

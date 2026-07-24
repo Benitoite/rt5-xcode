@@ -60,11 +60,11 @@ or modified by the Xcode build.
 
 ## Requirements
 
-- Xcode with its command-line tools selected
+- Xcode 14 with its command-line tools selected
 - CMake and Homebrew
 - A native-architecture Homebrew dependency installation
 - `create-dmg` and ImageMagick for the distribution disk image
-- macOS 26 (Tahoe) or later
+- macOS 12.5 (Monterey) or later for the Xcode 14 build environment
 
 The dependency set used by RawTherapee's macOS CI can be installed with:
 
@@ -91,8 +91,8 @@ when Homebrew is not installed at the prefix returned by `brew --prefix`.
   Developer ID Application identity installed for the current developer.
 - Distribution enables App Sandbox using the same broad filesystem exception
   used by RawTherapee's upstream macOS bundle.
-- The deployment target is macOS 26 so it matches dependencies built by the
-  current Tahoe Homebrew package set.
+- The deployment target is macOS 12. Dependencies must also be built for
+  macOS 12 or an earlier deployment target.
 - The app is built for the Mac's active architecture because Homebrew packages
   are architecture-specific. Homebrew is discovered through `brew --prefix`,
   which supports the usual `/opt/homebrew` Apple Silicon and `/usr/local` Intel
