@@ -92,8 +92,13 @@ required_packages=(
     libjxl
     libtiff-4
     libpng
-    simde
 )
+
+with_simde=OFF
+if [[ "$architecture" == "arm64" ]]; then
+    required_packages+=(simde)
+    with_simde=ON
+fi
 
 missing_packages=()
 for package in "${required_packages[@]}"; do
@@ -164,7 +169,7 @@ cmake \
     -DOpenMP_CXX_LIB_NAMES=libomp \
     -DOpenMP_libomp_LIBRARY="$libomp_library" \
     -DLOCAL_PREFIX="$homebrew_prefix" \
-    -DWITH_SIMDE=ON \
+    -DWITH_SIMDE="$with_simde" \
     -DWITH_SYSTEM_FMT=ON \
     -DWITH_LTO="$link_time_optimization" \
     -DOSX_DEV_BUILD=ON \

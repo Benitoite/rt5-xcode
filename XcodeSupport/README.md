@@ -72,13 +72,21 @@ The dependency set used by RawTherapee's macOS CI can be installed with:
 brew install \
   adwaita-icon-theme automake exiv2 expat fftw fmt gtk+3 gtkmm3 \
   gtk-mac-integration jpeg-xl lensfun libiptcdata libomp libpng \
-  libsigc++@2 libtiff little-cms2 pkgconfig shared-mime-info simde \
+  libsigc++@2 libtiff little-cms2 pkgconfig shared-mime-info \
   create-dmg imagemagick
 ```
 
+Apple Silicon builds also require SIMDe:
+
+```sh
+brew install simde
+```
+
 The build validates the required pkg-config modules and reports any missing
-ones. Set `RAWTHERAPEE_HOMEBREW_PREFIX` in the scheme's build environment only
-when Homebrew is not installed at the prefix returned by `brew --prefix`.
+ones. SIMDe is enabled and validated only for arm64 builds; Intel builds use
+RawTherapee's native x86 SIMD implementation. Set `RAWTHERAPEE_HOMEBREW_PREFIX`
+in the scheme's build environment only when Homebrew is not installed at the
+prefix returned by `brew --prefix`.
 
 ## Build configurations
 
