@@ -117,10 +117,10 @@ safe_version="$(printf '%s' "$version" | /usr/bin/tr -c 'A-Za-z0-9._-' '_')"
 architectures="$(
     /usr/bin/lipo -archs "${application}/Contents/MacOS/rawtherapee-bin"
 )"
-primary_architecture="${architectures%% *}"
-minimum_system_version="$(
+minimum_system_version_for_architecture()
+{
     /usr/libexec/PlistBuddy \
-        -c "Print :LSMinimumSystemVersionByArchitecture:${primary_architecture}" \
+        -c "Print :LSMinimumSystemVersionByArchitecture:$1" \
         "${application}/Contents/Info.plist" \
         2>/dev/null ||
         /usr/libexec/PlistBuddy \
@@ -128,11 +128,48 @@ minimum_system_version="$(
             "${application}/Contents/Info.plist" \
             2>/dev/null ||
         printf '%s' "${MACOSX_DEPLOYMENT_TARGET:-12.0}"
-)"
-if [[ "$architectures" == *" "* ]]; then
+}
+
+arm64_minimum_system_version=
+x86_64_minimum_system_version=
+architecture_count=0
+while IFS= read -r application_architecture; do
+    [[ -n "$application_architecture" ]] || continue
+    architecture_count=$((architecture_count + 1))
+    case "$application_architecture" in
+        arm64)
+            arm64_minimum_system_version="$(
+                minimum_system_version_for_architecture arm64
+            )"
+            ;;
+        x86_64)
+            x86_64_minimum_system_version="$(
+                minimum_system_version_for_architecture x86_64
+            )"
+            ;;
+        *)
+            die "Unsupported application architecture: ${application_architecture}"
+            ;;
+    esac
+done < <(printf '%s\n' "$architectures" | /usr/bin/tr ' ' '\n')
+
+if (( architecture_count == 2 )) &&
+   [[ -n "$arm64_minimum_system_version" &&
+      -n "$x86_64_minimum_system_version" ]]; then
     architecture_label=Universal
-else
+    minimum_system_version="$arm64_minimum_system_version"
+elif (( architecture_count == 1 )); then
     architecture_label="$architectures"
+    case "$architecture_label" in
+        arm64)
+            minimum_system_version="$arm64_minimum_system_version"
+            ;;
+        x86_64)
+            minimum_system_version="$x86_64_minimum_system_version"
+            ;;
+    esac
+else
+    die "Expected a thin app or an arm64/x86_64 universal app; found: ${architectures}"
 fi
 
 artifact_base="RawTherapee_MacOS_${minimum_system_version}_${architecture_label}_${safe_version}"
@@ -254,9 +291,17 @@ cli_slices=()
 while IFS= read -r cli_architecture; do
     [[ -n "$cli_architecture" ]] || continue
     cli_slice="${temporary_directory}/rawtherapee-cli-${cli_architecture}"
+    case "$cli_architecture" in
+        arm64)
+            cli_minimum_system_version="$arm64_minimum_system_version"
+            ;;
+        x86_64)
+            cli_minimum_system_version="$x86_64_minimum_system_version"
+            ;;
+    esac
     /usr/bin/clang \
         -arch "$cli_architecture" \
-        "-mmacosx-version-min=${minimum_system_version}" \
+        "-mmacosx-version-min=${cli_minimum_system_version}" \
         -Os \
         "${support_directory}/RawTherapeeCLIShim.c" \
         -o "$cli_slice"
@@ -314,7 +359,18 @@ fi
     printf '================================\n\n'
     printf 'Application version: %s\n' "$version"
     printf 'Bundle identifier: %s\n' "$bundle_identifier"
-    printf 'Minimum macOS: %s\n' "$minimum_system_version"
+    printf 'Artifact minimum macOS: %s\n' "$minimum_system_version"
+    if [[ -n "$arm64_minimum_system_version" ]]; then
+        printf 'Minimum macOS (arm64): %s\n' \
+            "$arm64_minimum_system_version"
+    fi
+    if [[ -n "$x86_64_minimum_system_version" ]]; then
+        printf 'Minimum macOS (x86_64): %s\n' \
+            "$x86_64_minimum_system_version"
+    fi
+    if [[ "$architecture_label" == "Universal" ]]; then
+        printf 'Version and resources: arm64 component\n'
+    fi
     printf 'Configuration: Distribution\n'
     printf 'Architectures: %s\n' "$architectures"
     printf 'Built at (UTC): %s\n\n' "$build_time"
@@ -338,6 +394,14 @@ fi
     printf '  About-this-build.txt\n\n'
     printf 'DMG SHA-256: %s\n' "$dmg_checksum"
     printf 'CLI SHA-256: %s\n' "$cli_checksum"
+    printf '\nEmbedded application build metadata\n'
+    printf '%s\n' '==================================='
+    if [[ -f "${application}/Contents/Resources/AboutThisBuild.txt" ]]; then
+        /bin/cat \
+            "${application}/Contents/Resources/AboutThisBuild.txt"
+    else
+        printf 'Unavailable\n'
+    fi
 } > "$about_output"
 
 # Store exactly the four distribution files at the ZIP root. -X omits

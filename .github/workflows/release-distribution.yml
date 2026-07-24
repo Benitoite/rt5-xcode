@@ -14,9 +14,146 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  intel-component:
+    name: Build the Intel x86_64 component
+    runs-on: macos-26-intel
+    timeout-minutes: 240
+
+    env:
+      DERIVED_DATA_PATH: ${{ github.workspace }}/DerivedData
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+    steps:
+      - name: Check out the project and RawTherapee
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Verify the RawTherapee submodule
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f RawTherapee5/rawtherapee/CMakeLists.txt ]]; then
+            echo "::error::The RawTherapee Gitlink is missing or its submodule was not initialized."
+            exit 1
+          fi
+
+          git submodule status --recursive
+          rawtherapee_version="$(
+            git -C RawTherapee5/rawtherapee describe --tags --always
+          )"
+          if [[ "$rawtherapee_version" != *.* ]]; then
+            echo "::error::RawTherapee version metadata is unavailable: ${rawtherapee_version}"
+            exit 1
+          fi
+          printf 'RawTherapee version: %s\n' "$rawtherapee_version"
+
+      - name: Show the Intel build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          printf 'macOS SDK: %s\n' "$sdk_version"
+          uname -m
+          df -h "$GITHUB_WORKSPACE"
+
+          if [[ "$(uname -m)" != "x86_64" ]]; then
+            echo "::error::The Intel component must run on x86_64."
+            exit 1
+          fi
+          if (( ${sdk_version%%.*} < 26 )); then
+            echo "::error::The Intel runner does not provide the required macOS 26 SDK."
+            exit 1
+          fi
+
+      - name: Install Intel build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          brew install \
+            adwaita-icon-theme \
+            automake \
+            cmake \
+            exiv2 \
+            expat \
+            fftw \
+            fmt \
+            gtk+3 \
+            gtk-mac-integration \
+            gtkmm3 \
+            jpeg-xl \
+            lensfun \
+            libiptcdata \
+            libomp \
+            libpng \
+            libsigc++@2 \
+            libtiff \
+            little-cms2 \
+            pkgconfig \
+            shared-mime-info
+
+          brew cleanup --prune=all
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Build the Intel application component
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          xcodebuild \
+            -project RawTherapee5.xcodeproj \
+            -scheme RawTherapee \
+            -configuration Release \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            ARCHS=x86_64 \
+            ONLY_ACTIVE_ARCH=YES \
+            build |
+            tee "$RUNNER_TEMP/xcodebuild-intel.log"
+
+          application="$DERIVED_DATA_PATH/Build/Products/Release/RawTherapee.app"
+          [[ -d "$application" ]] || {
+            echo "::error::The Intel application was not produced."
+            exit 1
+          }
+
+          while IFS= read -r -d '' candidate; do
+            if /usr/bin/file -b "$candidate" | /usr/bin/grep -q 'Mach-O'; then
+              candidate_architectures="$(/usr/bin/lipo -archs "$candidate")"
+              if [[ "$candidate_architectures" != "x86_64" ]]; then
+                echo "::error::Intel component contains ${candidate_architectures}: ${candidate}"
+                exit 1
+              fi
+            fi
+          done < <(
+            /usr/bin/find \
+              "$application/Contents/MacOS" \
+              "$application/Contents/Frameworks" \
+              -type f -print0
+          )
+
+          /bin/mkdir -p "$GITHUB_WORKSPACE/intel-component"
+          /usr/bin/ditto \
+            "$application" \
+            "$GITHUB_WORKSPACE/intel-component/RawTherapee.app"
+
+      - name: Cache the Intel countercomponent for the arm64 job
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: intel-component
+          key: rawtherapee-intel-${{ github.run_id }}
+
   distribution:
-    name: Build, sign, notarize, and package
-    runs-on: macos-latest
+    name: Build the arm64 app and universal distribution
+    needs: intel-component
+    runs-on: macos-26
     timeout-minutes: 240
     environment: release
 
@@ -54,6 +191,25 @@ jobs:
             exit 1
           fi
           printf 'RawTherapee version: %s\n' "$rawtherapee_version"
+
+      - name: Restore the Intel countercomponent
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: intel-component
+          key: rawtherapee-intel-${{ github.run_id }}
+          fail-on-cache-miss: true
+
+      - name: Validate the Intel countercomponent
+        shell: bash
+        run: |
+          set -euo pipefail
+          intel_app="$GITHUB_WORKSPACE/intel-component/RawTherapee.app"
+          intel_engine="$intel_app/Contents/MacOS/rawtherapee-bin"
+          [[ -x "$intel_engine" ]] || {
+            echo "::error::The restored Intel engine is missing."
+            exit 1
+          }
+          [[ "$(/usr/bin/lipo -archs "$intel_engine")" == "x86_64" ]]
 
       - name: Validate required release secrets
         shell: bash
@@ -100,8 +256,12 @@ jobs:
           uname -m
           df -h "$GITHUB_WORKSPACE"
 
+          if [[ "$(uname -m)" != "arm64" ]]; then
+            echo "::error::Universal assembly must run on arm64."
+            exit 1
+          fi
           if (( ${sdk_version%%.*} < 26 )); then
-            echo "::error::macos-latest does not currently provide the macOS 26 SDK required by this project."
+            echo "::error::The arm64 runner does not provide the required macOS 26 SDK."
             exit 1
           fi
 
@@ -229,15 +389,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          native_arch="$(uname -m)"
+          intel_app="$GITHUB_WORKSPACE/intel-component/RawTherapee.app"
+          [[ -d "$intel_app" ]] || {
+            echo "::error::The Intel countercomponent is unavailable."
+            exit 1
+          }
+
           xcodebuild \
             -project RawTherapee5.xcodeproj \
             -scheme "RawTherapee Distribution" \
             -configuration Distribution \
             -destination "generic/platform=macOS" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
-            ARCHS="$native_arch" \
+            ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=YES \
+            RAWTHERAPEE_UNIVERSAL_COUNTERPART_APP="$intel_app" \
             build |
             tee "$RUNNER_TEMP/xcodebuild.log"
 
@@ -247,6 +413,41 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
+          application="$DERIVED_DATA_PATH/Build/Products/Distribution/RawTherapee.app"
+          [[ -d "$application" ]] || {
+            echo "::error::The universal application was not produced."
+            exit 1
+          }
+
+          while IFS= read -r -d '' candidate; do
+            if /usr/bin/file -b "$candidate" | /usr/bin/grep -q 'Mach-O'; then
+              candidate_architectures="$(/usr/bin/lipo -archs "$candidate")"
+              if [[ "$candidate_architectures" != "arm64 x86_64" &&
+                    "$candidate_architectures" != "x86_64 arm64" ]]; then
+                echo "::error::Universal app contains ${candidate_architectures}: ${candidate}"
+                exit 1
+              fi
+            fi
+          done < <(
+            /usr/bin/find \
+              "$application/Contents/MacOS" \
+              "$application/Contents/Frameworks" \
+              -type f -print0
+          )
+
+          arm64_minimum="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :LSMinimumSystemVersionByArchitecture:arm64" \
+              "$application/Contents/Info.plist"
+          )"
+          x86_64_minimum="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :LSMinimumSystemVersionByArchitecture:x86_64" \
+              "$application/Contents/Info.plist"
+          )"
+          printf 'Minimum macOS: arm64=%s, x86_64=%s\n' \
+            "$arm64_minimum" "$x86_64_minimum"
+
           zip_artifacts=(dist/*.zip)
           if (( ${#zip_artifacts[@]} != 1 )); then
             echo "::error::The distribution build did not produce exactly one ZIP."
@@ -254,6 +455,11 @@ jobs:
           fi
 
           zip_path="${zip_artifacts[0]}"
+          if [[ "$(basename "$zip_path")" != \
+                "RawTherapee_MacOS_${arm64_minimum}_Universal_"*.zip ]]; then
+            echo "::error::The ZIP name is not the arm64-versioned Universal artifact: ${zip_path}"
+            exit 1
+          fi
           dmg_name="$(basename "${zip_path%.zip}.dmg")"
           entries="$(/usr/bin/unzip -Z1 "$zip_path")"
           entry_count="$(printf '%s\n' "$entries" | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
@@ -276,6 +482,14 @@ jobs:
             fi
           done
 
+          about_this_build="$(/usr/bin/unzip -p "$zip_path" About-this-build.txt)"
+          for expected_line in \
+            "Minimum macOS (arm64): ${arm64_minimum}" \
+            "Minimum macOS (x86_64): ${x86_64_minimum}" \
+            "Version and resources: arm64 component"
+          do
+            /usr/bin/grep -Fqx "$expected_line" <<< "$about_this_build"
+          done
           /usr/bin/unzip -p "$zip_path" About-this-build.txt
 
       - name: Upload the notarized distribution

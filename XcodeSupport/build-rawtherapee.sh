@@ -26,6 +26,7 @@ configuration="${CONFIGURATION:-Debug}"
 architecture="${CURRENT_ARCH:-$(uname -m)}"
 bundle_identifier="${PRODUCT_BUNDLE_IDENTIFIER:-com.rawtherapee.rawtherapee5}"
 sandbox_enabled="${ENABLE_APP_SANDBOX:-NO}"
+universal_counterpart="${RAWTHERAPEE_UNIVERSAL_COUNTERPART_APP:-}"
 
 if [[ "$architecture" == "undefined_arch" || -z "$architecture" ]]; then
     architecture="$(uname -m)"
@@ -38,6 +39,15 @@ case "$architecture" in
         die "Unsupported architecture: ${architecture}"
         ;;
 esac
+
+if [[ -n "$universal_counterpart" ]]; then
+    [[ "$architecture" == "arm64" ]] ||
+        die "Universal assembly must run as the arm64 build."
+    [[ -d "$universal_counterpart" ]] ||
+        die "The universal x86_64 countercomponent was not found: ${universal_counterpart}"
+    [[ -x "${support_directory}/merge-universal-app.sh" ]] ||
+        die "The universal merge helper is missing or not executable."
+fi
 
 [[ "$bundle_identifier" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] ||
     die "Invalid product bundle identifier: ${bundle_identifier}"
@@ -87,6 +97,7 @@ required_packages=(
     lensfun
     libiptcdata
     fftw3f
+    fmt
     lcms2
     exiv2
     libjxl
@@ -376,6 +387,14 @@ done < <(
 
 (( invalid_dependency == 0 )) ||
     die "The completed app contains invalid dynamic-library references."
+
+if [[ -n "$universal_counterpart" ]]; then
+    log "merging the x86_64 countercomponent into the arm64 application"
+    /bin/bash \
+        "${support_directory}/merge-universal-app.sh" \
+        "$bundle" \
+        "$universal_counterpart"
+fi
 
 log "copying the relocatable bundle into Xcode's product directory"
 /bin/rm -rf "$product"

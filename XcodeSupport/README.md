@@ -101,11 +101,19 @@ prefix returned by `brew --prefix`.
   used by RawTherapee's upstream macOS bundle.
 - The deployment target is macOS 12. Dependencies must also be built for
   macOS 12 or an earlier deployment target.
-- The app is built for the Mac's active architecture because Homebrew packages
-  are architecture-specific. Homebrew is discovered through `brew --prefix`,
-  which supports the usual `/opt/homebrew` Apple Silicon and `/usr/local` Intel
-  installations. A universal app still requires separately built arm64 and
-  x86_64 dependency stacks.
+- Local builds use the Mac's active architecture because Homebrew packages are
+  architecture-specific. Homebrew is discovered through `brew --prefix`, which
+  supports the usual `/opt/homebrew` Apple Silicon and `/usr/local` Intel
+  installations.
+- The release workflow builds a native x86_64 app first, transfers it through
+  the Actions cache, and then builds the arm64 app. The arm64 build keeps its
+  version and resources, merges every matching Mach-O into a universal binary,
+  records the minimum macOS version for each architecture, and produces the
+  only retained workflow artifact.
+
+`RAWTHERAPEE_UNIVERSAL_COUNTERPART_APP` is reserved for this second-stage
+arm64 build. It must point to a thin x86_64 `RawTherapee.app`; the merge fails
+if either component has a missing, extra, or incorrectly sliced Mach-O file.
 
 ## Developer ID distribution
 

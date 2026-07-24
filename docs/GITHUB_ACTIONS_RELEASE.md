@@ -1,14 +1,21 @@
 # GitHub Actions release signing and notarization
 
-The `Signed and notarized distribution` workflow builds RawTherapee on
-GitHub's Apple Silicon `macos-latest` runner. It imports a Developer ID
-Application identity into a temporary keychain, creates a temporary
-`notarytool` profile, builds the `RawTherapee Distribution` scheme, and directly
-uploads one notarized ZIP as the workflow artifact.
+The `Signed and notarized distribution` workflow creates one universal
+RawTherapee distribution in two ordered native jobs:
 
-`macos-latest` is a moving label. The workflow verifies that its selected Xcode
-installation supplies at least the macOS 26 SDK required by this project and
-stops with a clear error if GitHub changes the label incompatibly.
+1. `macos-26-intel` builds a thin x86_64 app and transfers it to the next job
+   through the Actions cache. It is not uploaded as a workflow artifact.
+2. `macos-26` builds the arm64 app, merges every matching Mach-O with the Intel
+   countercomponent, signs and notarizes the universal app, and directly uploads
+   the single universal distribution ZIP.
+
+The arm64 component supplies the application version, resources, and system
+version in the artifact filename. `Info.plist`, the in-app
+`AboutThisBuild.txt`, and the ZIP's `About-this-build.txt` record separate
+minimum macOS versions and complete build metadata for arm64 and x86_64.
+
+Both jobs verify that their selected Xcode installation supplies at least the
+macOS 26 SDK required by this project.
 
 The workflow runs manually with **Actions > Signed and notarized distribution >
 Run workflow**, and automatically for tags whose names start with `v`.
@@ -166,7 +173,8 @@ git tag v5.13-xcode1
 git push origin v5.13-xcode1
 ```
 
-The build can take a long time because RawTherapee and its Homebrew dependency
+The build can take a long time because both native architectures build
+RawTherapee and their architecture-specific Homebrew dependency
 stack are compiled and bundled on a fresh runner. Apple notarization is
 performed three times: for the app, DMG, and final ZIP.
 
@@ -174,13 +182,13 @@ After success, open the workflow run and download the artifact named after the
 packaged ZIP:
 
 ```text
-RawTherapee_MacOS_<minimum-macOS>_<architecture>_<RawTherapee-version>.zip
+RawTherapee_MacOS_<arm64-minimum-macOS>_Universal_<RawTherapee-version>.zip
 ```
 
-For example, an Apple Silicon build may be named:
+For example:
 
 ```text
-RawTherapee_MacOS_26.0_arm64_5.13-rc1-34-g71c625fe7.zip
+RawTherapee_MacOS_12.0_Universal_5.13-rc1-34-g71c625fe7.zip
 ```
 
 The ZIP contains exactly four files at its root:
@@ -189,8 +197,10 @@ The ZIP contains exactly four files at its root:
 - The signed, notarized, and stapled `.dmg`
 - `rawtherapee-cli`
 - `About-this-build.txt`, containing the source commits, runner and toolchain
-  versions, workflow URL, and component SHA-256 checksums
+  versions, per-architecture minimum macOS versions, both native component
+  build records, workflow URL, and component SHA-256 checksums
 
+The x86_64 cache entry is only an inter-job handoff, not a downloadable artifact.
 The standalone DMG is not uploaded separately.
 Actions uses direct-file artifact upload, so GitHub does not wrap this ZIP in
 another ZIP layer.
