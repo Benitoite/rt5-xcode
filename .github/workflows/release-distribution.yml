@@ -1,0 +1,329 @@
+name: Signed and notarized distribution
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rawtherapee-distribution-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  distribution:
+    name: Build, sign, notarize, and package
+    runs-on: macos-latest
+    timeout-minutes: 240
+    environment: release
+
+    env:
+      DERIVED_DATA_PATH: ${{ github.workspace }}/DerivedData
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      NOTARY_PROFILE: RawTherapee5
+
+    steps:
+      - name: Check out the project and RawTherapee
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Verify the RawTherapee submodule
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f RawTherapee5/rawtherapee/CMakeLists.txt ]]; then
+            echo "::error::The RawTherapee Gitlink is missing or its submodule was not initialized."
+            echo "::error::Commit the mode-160000 RawTherapee5/rawtherapee entry before running this workflow."
+            exit 1
+          fi
+
+          git submodule status --recursive
+
+      - name: Validate required release secrets
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for variable in \
+            APPLE_CERTIFICATE_P12_BASE64 \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_ID \
+            APPLE_APP_SPECIFIC_PASSWORD \
+            APPLE_TEAM_ID
+          do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::Missing release environment secret: ${variable}"
+              missing=1
+            fi
+          done
+
+          if (( missing != 0 )); then
+            exit 1
+          fi
+
+          if [[ ! "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo "::error::APPLE_TEAM_ID must be a 10-character Apple Developer Team ID."
+            exit 1
+          fi
+
+      - name: Show the build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          printf 'macOS SDK: %s\n' "$sdk_version"
+          uname -m
+          df -h "$GITHUB_WORKSPACE"
+
+          if (( ${sdk_version%%.*} < 26 )); then
+            echo "::error::macos-latest does not currently provide the macOS 26 SDK required by this project."
+            exit 1
+          fi
+
+      - name: Install RawTherapee build and packaging dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          brew install \
+            adwaita-icon-theme \
+            automake \
+            cmake \
+            create-dmg \
+            exiv2 \
+            expat \
+            fftw \
+            fmt \
+            gtk+3 \
+            gtk-mac-integration \
+            gtkmm3 \
+            imagemagick \
+            jpeg-xl \
+            lensfun \
+            libiptcdata \
+            libomp \
+            libpng \
+            libsigc++@2 \
+            libtiff \
+            little-cms2 \
+            pkgconfig \
+            shared-mime-info \
+            simde
+
+          brew cleanup --prune=all
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Import the Developer ID Application identity
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          certificate_path="$RUNNER_TEMP/developer-id-application.p12"
+          keychain_path="$RUNNER_TEMP/rawtherapee-signing.keychain-db"
+          keychain_password="$(/usr/bin/openssl rand -hex 32)"
+
+          echo "::add-mask::$keychain_password"
+          echo "CERTIFICATE_PATH=$certificate_path" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
+
+          printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" |
+            /usr/bin/base64 --decode > "$certificate_path"
+          [[ -s "$certificate_path" ]] || {
+            echo "::error::The decoded certificate file is empty."
+            exit 1
+          }
+
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s \
+            "$keychain_path" \
+            "$HOME/Library/Keychains/login.keychain-db"
+          security default-keychain -d user -s "$keychain_path"
+
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+
+          identities="$(security find-identity -v -p codesigning "$keychain_path")"
+          if ! grep -Fq "Developer ID Application:" <<< "$identities"; then
+            echo "::error::The P12 does not contain a Developer ID Application identity and private key."
+            exit 1
+          fi
+          if ! grep -Fq "($APPLE_TEAM_ID)" <<< "$identities"; then
+            echo "::error::The Developer ID identity does not belong to APPLE_TEAM_ID."
+            exit 1
+          fi
+
+          echo "Developer ID Application identity imported successfully."
+
+      - name: Configure the local signing team
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          sed \
+            -e "s/^RAWTHERAPEE_DEVELOPMENT_TEAM[[:space:]]*=.*/RAWTHERAPEE_DEVELOPMENT_TEAM = ${APPLE_TEAM_ID}/" \
+            -e "s/^RAWTHERAPEE_NOTARY_PROFILE[[:space:]]*=.*/RAWTHERAPEE_NOTARY_PROFILE = ${NOTARY_PROFILE}/" \
+            XcodeSupport/LocalSigning.xcconfig.example \
+            > XcodeSupport/LocalSigning.xcconfig
+
+      - name: Create and validate the temporary notarytool profile
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID"
+
+          xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null
+          echo "Apple notarization credentials validated successfully."
+
+      - name: Build the signed and notarized distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          native_arch="$(uname -m)"
+          xcodebuild \
+            -project RawTherapee5.xcodeproj \
+            -scheme "RawTherapee Distribution" \
+            -configuration Distribution \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            ARCHS="$native_arch" \
+            ONLY_ACTIVE_ARCH=YES \
+            build |
+            tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Generate About this build
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          zip_artifacts=(dist/*.zip)
+          if (( ${#zip_artifacts[@]} != 1 )); then
+            echo "::error::The distribution build did not produce exactly one ZIP."
+            exit 1
+          fi
+
+          zip_path="${zip_artifacts[0]}"
+          application="$DERIVED_DATA_PATH/Build/Products/Distribution/RawTherapee.app"
+          about_path="dist/About-this-build.txt"
+
+          app_version="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :CFBundleShortVersionString" \
+              "$application/Contents/Info.plist"
+          )"
+          architectures="$(
+            /usr/bin/lipo \
+              -archs \
+              "$application/Contents/MacOS/rawtherapee-bin"
+          )"
+          parent_commit="$(git rev-parse HEAD)"
+          rawtherapee_commit="$(git -C RawTherapee5/rawtherapee rev-parse HEAD)"
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          xcode_version="$(xcodebuild -version | /usr/bin/paste -sd ' ' -)"
+          macos_version="$(sw_vers -productVersion)"
+          build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          zip_checksum="$(/usr/bin/shasum -a 256 "$zip_path" | /usr/bin/awk '{ print $1 }')"
+
+          {
+            printf 'RawTherapee macOS distribution\n'
+            printf '================================\n\n'
+            printf 'Application version: %s\n' "$app_version"
+            printf 'Bundle identifier: com.rawtherapee.rawtherapee5\n'
+            printf 'Configuration: Distribution\n'
+            printf 'Architectures: %s\n' "$architectures"
+            printf 'Built at (UTC): %s\n\n' "$build_time"
+            printf 'Parent repository: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+            printf 'Parent commit: %s\n' "$parent_commit"
+            printf 'RawTherapee commit: %s\n' "$rawtherapee_commit"
+            printf 'Git reference: %s\n' "$GITHUB_REF"
+            printf 'Workflow run: %s\n\n' \
+              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            printf 'Runner: %s (%s)\n' "$RUNNER_OS" "$(uname -m)"
+            printf 'macOS: %s\n' "$macos_version"
+            printf 'Xcode: %s\n' "$xcode_version"
+            printf 'macOS SDK: %s\n\n' "$sdk_version"
+            printf 'Signing: Developer ID Application with hardened runtime and App Sandbox\n'
+            printf 'Notarization: application, DMG, and final ZIP accepted by Apple\n'
+            printf 'Stapling: application and DMG tickets stapled and validated\n\n'
+            printf 'Distribution ZIP: %s\n' "$(basename "$zip_path")"
+            printf 'ZIP SHA-256: %s\n' "$zip_checksum"
+          } > "$about_path"
+
+          cat "$about_path"
+
+      - name: Upload the notarized distribution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: RawTherapee-${{ github.ref_name }}-${{ github.run_number }}
+          path: |
+            dist/*.zip
+            dist/About-this-build.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload Xcode logs after a failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: RawTherapee-failed-build-logs-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/xcodebuild.log
+            ${{ github.workspace }}/DerivedData/Logs/Build/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Remove temporary signing material
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" && -e "$KEYCHAIN_PATH" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          if [[ -n "${CERTIFICATE_PATH:-}" ]]; then
+            rm -f "$CERTIFICATE_PATH"
+          fi
+          rm -f XcodeSupport/LocalSigning.xcconfig
