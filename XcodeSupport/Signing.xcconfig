@@ -1,0 +1,8 @@
+// Portable signing defaults. Personal values belong in the ignored
+// LocalSigning.xcconfig file beside this file.
+RAWTHERAPEE_DEVELOPMENT_TEAM =
+RAWTHERAPEE_NOTARY_PROFILE = RawTherapee5
+
+#include? "LocalSigning.xcconfig"
+
+DEVELOPMENT_TEAM = $(RAWTHERAPEE_DEVELOPMENT_TEAM)

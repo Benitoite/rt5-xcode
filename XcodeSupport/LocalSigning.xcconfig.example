@@ -1,0 +1,4 @@
+// Copy this file to LocalSigning.xcconfig and enter your Apple Developer
+// Team ID. LocalSigning.xcconfig is ignored by source control.
+RAWTHERAPEE_DEVELOPMENT_TEAM = YOUR-10-CHARACTER-TEAM-ID
+RAWTHERAPEE_NOTARY_PROFILE = RawTherapee5

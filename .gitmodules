@@ -1,0 +1,4 @@
+[submodule "RawTherapee5/rawtherapee"]
+	path = RawTherapee5/rawtherapee
+	url = https://github.com/rawtherapee/rawtherapee.git
+	branch = release-5.13
