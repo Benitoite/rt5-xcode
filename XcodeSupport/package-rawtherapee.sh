@@ -96,12 +96,24 @@ if ! /usr/bin/xcrun notarytool history \
     die "Notarization credentials are unavailable. Run: xcrun notarytool store-credentials ${notary_profile} --apple-id YOUR-APPLE-ID --team-id ${team_identifier}"
 fi
 
-version="$(
-    /usr/libexec/PlistBuddy \
-        -c "Print :CFBundleShortVersionString" \
-        "${application}/Contents/Info.plist"
-)"
+version="$(git -C "$source_directory" describe --tags --always 2>/dev/null || true)"
+if [[ -z "$version" ]]; then
+    version="$(
+        /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleShortVersionString" \
+            "${application}/Contents/Info.plist" \
+            2>/dev/null ||
+            true
+    )"
+fi
+if [[ -z "$version" ]]; then
+    version="${MARKETING_VERSION:-}"
+fi
+[[ -n "$version" ]] ||
+    die "Could not determine the RawTherapee version for the distribution filename."
 safe_version="$(printf '%s' "$version" | /usr/bin/tr -c 'A-Za-z0-9._-' '_')"
+[[ -n "$safe_version" ]] ||
+    die "The RawTherapee version is not safe to use in a distribution filename."
 architectures="$(
     /usr/bin/lipo -archs "${application}/Contents/MacOS/rawtherapee-bin"
 )"

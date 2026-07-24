@@ -30,7 +30,7 @@ jobs:
       - name: Check out the project and RawTherapee
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
           submodules: recursive
 
@@ -46,6 +46,14 @@ jobs:
           fi
 
           git submodule status --recursive
+          rawtherapee_version="$(
+            git -C RawTherapee5/rawtherapee describe --tags --always
+          )"
+          if [[ "$rawtherapee_version" != *.* ]]; then
+            echo "::error::RawTherapee version metadata is unavailable: ${rawtherapee_version}"
+            exit 1
+          fi
+          printf 'RawTherapee version: %s\n' "$rawtherapee_version"
 
       - name: Validate required release secrets
         shell: bash

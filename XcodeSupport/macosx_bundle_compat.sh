@@ -138,7 +138,7 @@ if [[ ! -d $CMAKE_BUILD_TYPE ]]; then
 fi
 
 # Update project version
-if [[ -x $(which git) && -d $PROJECT_SOURCE_DIR/.git ]]; then
+if [[ -x $(which git) && -e $PROJECT_SOURCE_DIR/.git ]]; then
     ### This section is copied from tools/generateReleaseInfo
     # Get version description.
     # Depending on whether you checked out a branch (dev) or a tag (release),

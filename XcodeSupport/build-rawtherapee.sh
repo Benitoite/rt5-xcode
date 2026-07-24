@@ -71,6 +71,7 @@ export PKG_CONFIG_PATH="${homebrew_prefix}/lib/pkgconfig:${homebrew_prefix}/shar
 export GIT_CEILING_DIRECTORIES="$(dirname "$PROJECT_DIR")"
 
 require_command cmake
+require_command git
 require_command pkg-config
 require_command xcodebuild
 
@@ -233,11 +234,15 @@ patched_bundle_script="${cmake_build_directory}/macosx_bundle_xcode.sh"
     }
 ' "$bundle_script_source" > "$patched_bundle_script"
 
+source_git_directory="$(
+    git -C "$source_directory" rev-parse --absolute-git-dir 2>/dev/null
+)" || die "RawTherapee source is not a valid Git worktree."
+
 log "assembling the macOS application bundle"
 (
     cd "$cmake_build_directory"
     env \
-        GIT_DIR="${source_directory}/.git" \
+        GIT_DIR="$source_git_directory" \
         GIT_WORK_TREE="$source_directory" \
         PROJECT_NAME=RawTherapee \
         PROJECT_SOURCE_DIR="$source_directory" \
