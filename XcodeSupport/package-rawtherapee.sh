@@ -100,15 +100,20 @@ version="$(
         "${application}/Contents/Info.plist"
 )"
 safe_version="$(printf '%s' "$version" | /usr/bin/tr -c 'A-Za-z0-9._-' '_')"
-minimum_system_version="$(
-    /usr/libexec/PlistBuddy \
-        -c "Print :LSMinimumSystemVersionByArchitecture:arm64" \
-        "${application}/Contents/Info.plist" \
-        2>/dev/null ||
-        printf '%s' "${MACOSX_DEPLOYMENT_TARGET:-26.0}"
-)"
 architectures="$(
     /usr/bin/lipo -archs "${application}/Contents/MacOS/rawtherapee-bin"
+)"
+primary_architecture="${architectures%% *}"
+minimum_system_version="$(
+    /usr/libexec/PlistBuddy \
+        -c "Print :LSMinimumSystemVersionByArchitecture:${primary_architecture}" \
+        "${application}/Contents/Info.plist" \
+        2>/dev/null ||
+        /usr/libexec/PlistBuddy \
+            -c "Print :LSMinimumSystemVersion" \
+            "${application}/Contents/Info.plist" \
+            2>/dev/null ||
+        printf '%s' "${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 )"
 if [[ "$architectures" == *" "* ]]; then
     architecture_label=Universal
@@ -116,7 +121,7 @@ else
     architecture_label="$architectures"
 fi
 
-artifact_base="RawTherapee_macOS_${minimum_system_version}_${architecture_label}_${safe_version}"
+artifact_base="RawTherapee_MacOS_${minimum_system_version}_${architecture_label}_${safe_version}"
 dmg_path="${output_directory}/${artifact_base}.dmg"
 zip_path="${output_directory}/${artifact_base}.zip"
 

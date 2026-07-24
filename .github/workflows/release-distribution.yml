@@ -266,6 +266,9 @@ jobs:
           macos_version="$(sw_vers -productVersion)"
           build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           zip_checksum="$(/usr/bin/shasum -a 256 "$zip_path" | /usr/bin/awk '{ print $1 }')"
+          release_artifact_name="$(basename "$zip_path")"
+
+          echo "RELEASE_ARTIFACT_NAME=$release_artifact_name" >> "$GITHUB_ENV"
 
           {
             printf 'RawTherapee macOS distribution\n'
@@ -297,7 +300,7 @@ jobs:
       - name: Upload the notarized distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: RawTherapee-${{ github.ref_name }}-${{ github.run_number }}
+          name: ${{ env.RELEASE_ARTIFACT_NAME }}
           path: |
             dist/*.zip
             dist/About-this-build.txt
