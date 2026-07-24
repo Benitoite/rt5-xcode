@@ -233,7 +233,7 @@ jobs:
             build |
             tee "$RUNNER_TEMP/xcodebuild.log"
 
-      - name: Generate About this build
+      - name: Validate the flat distribution ZIP
         shell: bash
         run: |
           set -euo pipefail
@@ -246,66 +246,36 @@ jobs:
           fi
 
           zip_path="${zip_artifacts[0]}"
-          application="$DERIVED_DATA_PATH/Build/Products/Distribution/RawTherapee.app"
-          about_path="dist/About-this-build.txt"
+          dmg_name="$(basename "${zip_path%.zip}.dmg")"
+          entries="$(/usr/bin/unzip -Z1 "$zip_path")"
+          entry_count="$(printf '%s\n' "$entries" | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
 
-          app_version="$(
-            /usr/libexec/PlistBuddy \
-              -c "Print :CFBundleShortVersionString" \
-              "$application/Contents/Info.plist"
-          )"
-          architectures="$(
-            /usr/bin/lipo \
-              -archs \
-              "$application/Contents/MacOS/rawtherapee-bin"
-          )"
-          parent_commit="$(git rev-parse HEAD)"
-          rawtherapee_commit="$(git -C RawTherapee5/rawtherapee rev-parse HEAD)"
-          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
-          xcode_version="$(xcodebuild -version | /usr/bin/paste -sd ' ' -)"
-          macos_version="$(sw_vers -productVersion)"
-          build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-          zip_checksum="$(/usr/bin/shasum -a 256 "$zip_path" | /usr/bin/awk '{ print $1 }')"
-          release_artifact_name="$(basename "$zip_path")"
+          if [[ "$entry_count" != "4" ]]; then
+            echo "::error::The distribution ZIP must contain exactly four root files."
+            printf '%s\n' "$entries"
+            exit 1
+          fi
 
-          echo "RELEASE_ARTIFACT_NAME=$release_artifact_name" >> "$GITHUB_ENV"
+          for required_entry in \
+            install-readme.rtf \
+            "$dmg_name" \
+            rawtherapee-cli \
+            About-this-build.txt
+          do
+            if ! grep -Fxq "$required_entry" <<< "$entries"; then
+              echo "::error::Missing distribution ZIP entry: ${required_entry}"
+              exit 1
+            fi
+          done
 
-          {
-            printf 'RawTherapee macOS distribution\n'
-            printf '================================\n\n'
-            printf 'Application version: %s\n' "$app_version"
-            printf 'Bundle identifier: com.rawtherapee.rawtherapee5\n'
-            printf 'Configuration: Distribution\n'
-            printf 'Architectures: %s\n' "$architectures"
-            printf 'Built at (UTC): %s\n\n' "$build_time"
-            printf 'Parent repository: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
-            printf 'Parent commit: %s\n' "$parent_commit"
-            printf 'RawTherapee commit: %s\n' "$rawtherapee_commit"
-            printf 'Git reference: %s\n' "$GITHUB_REF"
-            printf 'Workflow run: %s\n\n' \
-              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-            printf 'Runner: %s (%s)\n' "$RUNNER_OS" "$(uname -m)"
-            printf 'macOS: %s\n' "$macos_version"
-            printf 'Xcode: %s\n' "$xcode_version"
-            printf 'macOS SDK: %s\n\n' "$sdk_version"
-            printf 'Signing: Developer ID Application with hardened runtime and App Sandbox\n'
-            printf 'Notarization: application, DMG, and final ZIP accepted by Apple\n'
-            printf 'Stapling: application and DMG tickets stapled and validated\n\n'
-            printf 'Distribution ZIP: %s\n' "$(basename "$zip_path")"
-            printf 'ZIP SHA-256: %s\n' "$zip_checksum"
-          } > "$about_path"
-
-          cat "$about_path"
+          /usr/bin/unzip -p "$zip_path" About-this-build.txt
 
       - name: Upload the notarized distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ env.RELEASE_ARTIFACT_NAME }}
-          path: |
-            dist/*.zip
-            dist/About-this-build.txt
+          path: dist/*.zip
+          archive: false
           if-no-files-found: error
-          compression-level: 0
           retention-days: 30
 
       - name: Upload Xcode logs after a failure

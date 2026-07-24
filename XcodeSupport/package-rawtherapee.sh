@@ -41,8 +41,10 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 require_command codesign
 require_command create-dmg
 require_command ditto
+require_command git
 require_command magick
 require_command xcrun
+require_command zip
 
 signature_details="$(/usr/bin/codesign -d --verbose=4 "$application" 2>&1)"
 signing_authority="$(
@@ -229,10 +231,12 @@ dmg_submission="${temporary_directory}/${artifact_base}.dmg.zip"
 log "building the distribution ZIP"
 zip_folder="${temporary_directory}/${artifact_base}_folder"
 /bin/mkdir -p "$zip_folder"
-/usr/bin/ditto "$dmg_path" "${zip_folder}/$(basename "$dmg_path")"
+dmg_output="${zip_folder}/$(basename "$dmg_path")"
+install_readme="${zip_folder}/install-readme.rtf"
+/usr/bin/ditto "$dmg_path" "$dmg_output"
 /usr/bin/ditto \
     "${source_directory}/tools/osx/INSTALL.readme.rtf" \
-    "${zip_folder}/install-readme.rtf"
+    "$install_readme"
 
 cli_slices=()
 while IFS= read -r cli_architecture; do
@@ -263,10 +267,76 @@ fi
     "$cli_output"
 /usr/bin/codesign --verify --strict --verbose=2 "$cli_output"
 
-/usr/bin/ditto \
-    -c -k --sequesterRsrc --keepParent \
-    "$zip_folder" \
-    "$zip_path"
+about_output="${zip_folder}/About-this-build.txt"
+parent_commit="$(
+    git -C "$project_directory" rev-parse HEAD 2>/dev/null ||
+        printf 'unavailable'
+)"
+rawtherapee_commit="$(
+    git -C "$source_directory" rev-parse HEAD 2>/dev/null ||
+        printf 'unavailable'
+)"
+sdk_version="$(/usr/bin/xcrun --sdk macosx --show-sdk-version)"
+xcode_version="$(/usr/bin/xcodebuild -version | /usr/bin/paste -sd ' ' -)"
+macos_version="$(/usr/bin/sw_vers -productVersion)"
+build_time="$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')"
+dmg_checksum="$(/usr/bin/shasum -a 256 "$dmg_output" | /usr/bin/awk '{ print $1 }')"
+cli_checksum="$(/usr/bin/shasum -a 256 "$cli_output" | /usr/bin/awk '{ print $1 }')"
+
+if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+    parent_repository="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+else
+    parent_repository="$project_directory"
+fi
+
+if [[ -n "${GITHUB_SERVER_URL:-}" &&
+      -n "${GITHUB_REPOSITORY:-}" &&
+      -n "${GITHUB_RUN_ID:-}" ]]; then
+    workflow_run="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+else
+    workflow_run="local build"
+fi
+
+{
+    printf 'RawTherapee macOS distribution\n'
+    printf '================================\n\n'
+    printf 'Application version: %s\n' "$version"
+    printf 'Bundle identifier: %s\n' "$bundle_identifier"
+    printf 'Minimum macOS: %s\n' "$minimum_system_version"
+    printf 'Configuration: Distribution\n'
+    printf 'Architectures: %s\n' "$architectures"
+    printf 'Built at (UTC): %s\n\n' "$build_time"
+    printf 'Parent repository: %s\n' "$parent_repository"
+    printf 'Parent commit: %s\n' "$parent_commit"
+    printf 'RawTherapee commit: %s\n' "$rawtherapee_commit"
+    printf 'Git reference: %s\n' "${GITHUB_REF:-local}"
+    printf 'Workflow run: %s\n\n' "$workflow_run"
+    printf 'Runner: %s (%s)\n' "${RUNNER_OS:-macOS}" "$(/usr/bin/uname -m)"
+    printf 'macOS: %s\n' "$macos_version"
+    printf 'Xcode: %s\n' "$xcode_version"
+    printf 'macOS SDK: %s\n\n' "$sdk_version"
+    printf 'Signing: Developer ID Application with hardened runtime and App Sandbox\n'
+    printf 'Notarization: application and DMG accepted by Apple\n'
+    printf 'Final ZIP: submitted to Apple after this exact archive is created\n'
+    printf 'Stapling: application and DMG tickets stapled and validated\n\n'
+    printf 'Files in this archive:\n'
+    printf '  install-readme.rtf\n'
+    printf '  %s\n' "$(basename "$dmg_output")"
+    printf '  rawtherapee-cli\n'
+    printf '  About-this-build.txt\n\n'
+    printf 'DMG SHA-256: %s\n' "$dmg_checksum"
+    printf 'CLI SHA-256: %s\n' "$cli_checksum"
+} > "$about_output"
+
+# Store exactly the four distribution files at the ZIP root. -X omits
+# platform-specific metadata entries and -j prevents parent folder nesting.
+/usr/bin/zip \
+    -X -j -0 \
+    "$zip_path" \
+    "$install_readme" \
+    "$dmg_output" \
+    "$cli_output" \
+    "$about_output"
 
 log "submitting the final distribution ZIP for notarization"
 /usr/bin/xcrun notarytool submit \
