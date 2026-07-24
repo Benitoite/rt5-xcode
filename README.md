@@ -4,9 +4,9 @@
   <img alt="RawTherapee logo" src="[https://user-images.githubusercontent.com/25423296/163456779-a8556205-d0a5-45e2-ac17-42d089e3c3f8.png](https://raw.githubusercontent.com/RawTherapee/RawTherapee/dev/rtdata/images/rt-logo-text-black.svg)">
 </picture>
 
-# *How to build RawTherapee 5.13+ on Apple Xcode*
+# *How to build RawTherapee 5.13+ on Apple® Xcode®*
 
-There are 2 methods for building RawTherapee on Apple XCode:
+There are 2 methods for building RawTherapee on Apple® XCode®:
 * Build for yourself
 * Build for distribution
 
@@ -54,10 +54,10 @@ open -a rawtherapee
 ```
 
 # Method 2: Build for Distribution outside the App Store
-Apple Developers may also choose to build a distributable package using this method.
+Apple® Developers may also choose to build a distributable package using this method.
 
 ## Setup Notary Services
-### Run this command with your details (you will be prompted for your Apple App-Specific Password)
+### Run this command with your details (you will be prompted for your Apple® App-Specific Password)
 ```zsh
 xcrun notarytool store-credentials RawTherapee5 \
   --apple-id "YOUR-APPLE-ID-EMAIL" \
@@ -75,7 +75,7 @@ cp XcodeSupport/LocalSigning.xcconfig.example \
    XcodeSupport/LocalSigning.xcconfig
 ```
 
-### Edit the Local Signing File & insert your Apple Developer Team ID value (a 10-digit code)
+### Edit the Local Signing File & insert your Apple® Developer Team ID value (a 10-digit code)
 With an editor:
 ```zsh
 pico XcodeSupport/LocalSigning.xcconfig
