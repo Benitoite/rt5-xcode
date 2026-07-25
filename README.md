@@ -6,9 +6,11 @@
 
 # *How to build RawTherapee 5.13+ on Apple® Xcode®*
 
-There are 2 methods for building RawTherapee on Apple® XCode®:
+There are 3 methods for building RawTherapee on Apple® Xcode®:
+
 * Build for yourself
 * Build for distribution
+* Build a universal distribution on two Macs
 
 # Method 1: Ad Hoc build for your own machine.
 
@@ -122,3 +124,24 @@ sudo /usr/bin/ditto \
   "$PWD/DerivedData/Build/Products/Distribution/RawTherapee.app" \
   "/Applications/RawTherapee.app"
 ```
+
+# Method 3: Build a universal distribution on two Macs
+
+Use the same repository commit on both Macs. Only the arm64 Mac needs the
+signing and notarization setup from Method 2.
+
+## 1. On the Intel Monterey Mac
+
+```zsh
+./XcodeSupport/two-mac-universal.sh intel
+```
+
+Wait for the ZIP to finish syncing through iCloud Drive.
+
+## 2. On the arm64 Tahoe Mac
+
+```zsh
+./XcodeSupport/two-mac-universal.sh arm
+```
+
+The completed universal distribution ZIP will be in `dist`.
