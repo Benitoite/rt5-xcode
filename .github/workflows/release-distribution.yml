@@ -429,14 +429,27 @@ jobs:
             exit 1
           }
 
+          universal_count=0
+          arm64_only_count=0
+          x86_64_only_count=0
           while IFS= read -r -d '' candidate; do
             if /usr/bin/file -b "$candidate" | /usr/bin/grep -q 'Mach-O'; then
               candidate_architectures="$(/usr/bin/lipo -archs "$candidate")"
-              if [[ "$candidate_architectures" != "arm64 x86_64" &&
-                    "$candidate_architectures" != "x86_64 arm64" ]]; then
-                echo "::error::Universal app contains ${candidate_architectures}: ${candidate}"
-                exit 1
-              fi
+              case "$candidate_architectures" in
+                "arm64 x86_64"|"x86_64 arm64")
+                  universal_count=$((universal_count + 1))
+                  ;;
+                arm64)
+                  arm64_only_count=$((arm64_only_count + 1))
+                  ;;
+                x86_64)
+                  x86_64_only_count=$((x86_64_only_count + 1))
+                  ;;
+                *)
+                  echo "::error::Universal app contains unsupported architectures (${candidate_architectures}): ${candidate}"
+                  exit 1
+                  ;;
+              esac
             fi
           done < <(
             /usr/bin/find \
@@ -444,6 +457,23 @@ jobs:
               "$application/Contents/Frameworks" \
               -type f -print0
           )
+
+          for required_executable in \
+            rawtherapee \
+            rawtherapee-bin \
+            rawtherapee-cli \
+            rawtherapee-cli-bin
+          do
+            executable_path="$application/Contents/MacOS/$required_executable"
+            executable_architectures="$(/usr/bin/lipo -archs "$executable_path")"
+            if [[ "$executable_architectures" != "arm64 x86_64" &&
+                  "$executable_architectures" != "x86_64 arm64" ]]; then
+              echo "::error::Required executable is not universal (${executable_architectures}): ${executable_path}"
+              exit 1
+            fi
+          done
+          printf 'Mach-O files: universal=%s, arm64-only=%s, x86_64-only=%s\n' \
+            "$universal_count" "$arm64_only_count" "$x86_64_only_count"
 
           arm64_minimum="$(
             /usr/libexec/PlistBuddy \

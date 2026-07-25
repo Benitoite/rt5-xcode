@@ -7,8 +7,10 @@ RawTherapee distribution in two ordered native jobs:
    transfers it to the next job through the Actions cache. It is not uploaded
    as a workflow artifact.
 2. `macos-26` builds the arm64 app targeting macOS 26 Tahoe, merges every
-   matching Mach-O with the Intel countercomponent, signs and notarizes the
-   universal app, and directly uploads the single universal distribution ZIP.
+   matching Mach-O with the Intel countercomponent, retains architecture-only
+   Homebrew dependencies when the runner package versions differ, validates
+   both dependency graphs, signs and notarizes the universal app, and directly
+   uploads the single universal distribution ZIP.
 
 The arm64 component supplies the application version, resources, and system
 version in the artifact filename. `Info.plist`, the in-app

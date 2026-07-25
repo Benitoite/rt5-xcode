@@ -110,12 +110,18 @@ prefix returned by `brew --prefix`.
 - The release workflow builds a native x86_64 app first, transfers it through
   the Actions cache, and then builds the arm64 app. The arm64 build keeps its
   version and resources, merges every matching Mach-O into a universal binary,
-  records the minimum macOS version for each architecture, and produces the
-  only retained workflow artifact.
+  retains thin dependency files needed by only one architecture, validates
+  each architecture's complete `@rpath` dependency graph, records the minimum
+  macOS version for each architecture, and produces the only retained workflow
+  artifact.
 
 `RAWTHERAPEE_UNIVERSAL_COUNTERPART_APP` is reserved for this second-stage
-arm64 build. It must point to a thin x86_64 `RawTherapee.app`; the merge fails
-if either component has a missing, extra, or incorrectly sliced Mach-O file.
+arm64 build. It must point to a thin x86_64 `RawTherapee.app`. The four
+RawTherapee executables must exist in both components and become universal.
+Homebrew dependencies may differ between runner images: matching paths are
+merged, architecture-specific paths are retained as thin files, and the merge
+fails if a dependency required by either architecture is absent or has the
+wrong slice.
 
 ## Developer ID distribution
 
