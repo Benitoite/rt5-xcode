@@ -409,7 +409,7 @@ jobs:
             build |
             tee "$RUNNER_TEMP/xcodebuild.log"
 
-      - name: Validate the flat distribution ZIP
+      - name: Validate the named-folder distribution ZIP
         shell: bash
         run: |
           set -euo pipefail
@@ -471,21 +471,24 @@ jobs:
             echo "::error::The ZIP name is not the arm64-versioned Universal artifact: ${zip_path}"
             exit 1
           fi
-          dmg_name="$(basename "${zip_path%.zip}.dmg")"
+          artifact_base="$(basename "${zip_path%.zip}")"
+          archive_folder="${artifact_base}/"
+          dmg_name="${artifact_base}.dmg"
           entries="$(/usr/bin/unzip -Z1 "$zip_path")"
           entry_count="$(printf '%s\n' "$entries" | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
 
-          if [[ "$entry_count" != "4" ]]; then
-            echo "::error::The distribution ZIP must contain exactly four root files."
+          if [[ "$entry_count" != "5" ]]; then
+            echo "::error::The distribution ZIP must contain one named folder and exactly four files."
             printf '%s\n' "$entries"
             exit 1
           fi
 
           for required_entry in \
-            install-readme.rtf \
-            "$dmg_name" \
-            rawtherapee-cli \
-            About-this-build.txt
+            "$archive_folder" \
+            "${archive_folder}install-readme.rtf" \
+            "${archive_folder}${dmg_name}" \
+            "${archive_folder}rawtherapee-cli" \
+            "${archive_folder}About-this-build.txt"
           do
             if ! grep -Fxq "$required_entry" <<< "$entries"; then
               echo "::error::Missing distribution ZIP entry: ${required_entry}"
@@ -493,7 +496,7 @@ jobs:
             fi
           done
 
-          about_this_build="$(/usr/bin/unzip -p "$zip_path" About-this-build.txt)"
+          about_this_build="$(/usr/bin/unzip -p "$zip_path" "${archive_folder}About-this-build.txt")"
           for expected_line in \
             "Minimum macOS (arm64): ${arm64_minimum}" \
             "Minimum macOS (x86_64): ${x86_64_minimum}" \
@@ -501,7 +504,7 @@ jobs:
           do
             /usr/bin/grep -Fqx "$expected_line" <<< "$about_this_build"
           done
-          /usr/bin/unzip -p "$zip_path" About-this-build.txt
+          /usr/bin/unzip -p "$zip_path" "${archive_folder}About-this-build.txt"
 
       - name: Upload the notarized distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

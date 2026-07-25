@@ -278,7 +278,7 @@ dmg_submission="${temporary_directory}/${artifact_base}.dmg.zip"
 /usr/sbin/spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path"
 
 log "building the distribution ZIP"
-zip_folder="${temporary_directory}/${artifact_base}_folder"
+zip_folder="${temporary_directory}/${artifact_base}"
 /bin/mkdir -p "$zip_folder"
 dmg_output="${zip_folder}/$(basename "$dmg_path")"
 install_readme="${zip_folder}/install-readme.rtf"
@@ -404,15 +404,15 @@ fi
     fi
 } > "$about_output"
 
-# Store exactly the four distribution files at the ZIP root. -X omits
-# platform-specific metadata entries and -j prevents parent folder nesting.
-/usr/bin/zip \
-    -X -j -0 \
-    "$zip_path" \
-    "$install_readme" \
-    "$dmg_output" \
-    "$cli_output" \
-    "$about_output"
+# Store exactly one top-level folder named after the complete artifact. -X
+# omits platform-specific metadata entries.
+(
+    cd "$temporary_directory"
+    /usr/bin/zip \
+        -X -0 -r \
+        "$zip_path" \
+        "$artifact_base"
+)
 
 log "submitting the final distribution ZIP for notarization"
 /usr/bin/xcrun notarytool submit \
