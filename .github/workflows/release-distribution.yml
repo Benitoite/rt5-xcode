@@ -16,8 +16,8 @@ concurrency:
 jobs:
   intel-component:
     name: Build the Intel x86_64 component
-    # Plain macos-14 is arm64; -large is GitHub's Intel Sonoma image.
-    runs-on: macos-14-large
+    # Use GitHub's standard Intel runner; -large labels require paid larger runners.
+    runs-on: macos-15-intel
     timeout-minutes: 240
 
     env:
@@ -65,8 +65,8 @@ jobs:
           uname -m
           df -h "$GITHUB_WORKSPACE"
 
-          if [[ "${macos_version%%.*}" != "14" ]]; then
-            echo "::error::The Intel component must run on macOS 14 Sonoma."
+          if [[ "${macos_version%%.*}" != "15" ]]; then
+            echo "::error::The Intel component must run on macOS 15 Sequoia."
             exit 1
           fi
           if [[ "$(uname -m)" != "x86_64" ]]; then
