@@ -396,6 +396,10 @@ if [[ -n "$universal_counterpart" ]]; then
         "$universal_counterpart"
 fi
 
+log "preserving the assembled application metadata"
+prepared_info="${TARGET_BUILD_DIR}/RawTherapee-prepared-Info.plist"
+/usr/bin/ditto "${bundle}/Contents/Info.plist" "$prepared_info"
+
 log "copying the relocatable bundle into Xcode's product directory"
 /bin/rm -rf "$product"
 /usr/bin/ditto "$bundle" "$product"

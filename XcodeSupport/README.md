@@ -112,8 +112,11 @@ prefix returned by `brew --prefix`.
   version and resources, merges every matching Mach-O into a universal binary,
   retains thin dependency files needed by only one architecture, validates
   each architecture's complete `@rpath` dependency graph, records the minimum
-  macOS version for each architecture, and produces the only retained workflow
-  artifact.
+  macOS version for each architecture, preserves that assembled metadata past
+  Xcode's generated-plist step, and produces the only retained workflow
+  artifact. The packaging target restores and re-signs the assembled plist
+  before notarization so a universal app cannot inherit the arm64-only minimum
+  as a bundle-wide requirement.
 
 `RAWTHERAPEE_UNIVERSAL_COUNTERPART_APP` is reserved for this second-stage
 arm64 build. It must point to a thin x86_64 `RawTherapee.app`. The four

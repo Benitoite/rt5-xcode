@@ -182,6 +182,7 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(TARGET_BUILD_DIR)/RawTherapee-prepared-Info.plist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
@@ -198,6 +199,7 @@
 			);
 			inputPaths = (
 				"$(BUILT_PRODUCTS_DIR)/RawTherapee.app",
+				"$(BUILT_PRODUCTS_DIR)/RawTherapee-prepared-Info.plist",
 			);
 			name = "Notarize and Package";
 			outputFileListPaths = (

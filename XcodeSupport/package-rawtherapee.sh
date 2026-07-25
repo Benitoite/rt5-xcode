@@ -35,6 +35,9 @@ products_directory="${BUILT_PRODUCTS_DIR:-${TARGET_BUILD_DIR:-}}"
 application="${products_directory}/RawTherapee.app"
 [[ -d "$application" ]] ||
     die "The signed application was not found at ${application}."
+prepared_info="${products_directory}/RawTherapee-prepared-Info.plist"
+[[ -f "$prepared_info" ]] ||
+    die "The assembled application metadata was not found at ${prepared_info}."
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -42,7 +45,10 @@ require_command codesign
 require_command create-dmg
 require_command ditto
 require_command git
+require_command lipo
 require_command magick
+require_command otool
+require_command plutil
 require_command xcrun
 require_command zip
 
@@ -87,6 +93,28 @@ printf '%s\n' "$entitlements" |
     /usr/bin/grep -q '<key>com.apple.security.app-sandbox</key>' ||
     die "The application is not signed with App Sandbox enabled."
 
+prepared_identifier="$(
+    /usr/libexec/PlistBuddy \
+        -c "Print :CFBundleIdentifier" \
+        "$prepared_info"
+)"
+[[ "$prepared_identifier" == "$bundle_identifier" ]] ||
+    die "Unexpected assembled bundle identifier: ${prepared_identifier}"
+
+log "restoring the assembled application metadata"
+/usr/bin/ditto \
+    "$prepared_info" \
+    "${application}/Contents/Info.plist"
+/usr/bin/plutil -lint "${application}/Contents/Info.plist" >/dev/null
+/usr/bin/codesign \
+    --force \
+    --sign "$identity" \
+    --timestamp \
+    --options runtime \
+    --identifier "$bundle_identifier" \
+    --entitlements "${support_directory}/RawTherapee.entitlements" \
+    "$application"
+
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$application"
 
 log "validating the Apple notarization profile"
@@ -117,6 +145,32 @@ safe_version="$(printf '%s' "$version" | /usr/bin/tr -c 'A-Za-z0-9._-' '_')"
 architectures="$(
     /usr/bin/lipo -archs "${application}/Contents/MacOS/rawtherapee-bin"
 )"
+minimum_system_version_from_binary()
+{
+    /usr/bin/otool -arch "$1" -l \
+        "${application}/Contents/MacOS/rawtherapee-bin" |
+        /usr/bin/awk '
+            $1 == "cmd" && $2 == "LC_BUILD_VERSION" {
+                in_build_version = 1
+                in_legacy_version = 0
+                next
+            }
+            $1 == "cmd" && $2 == "LC_VERSION_MIN_MACOSX" {
+                in_build_version = 0
+                in_legacy_version = 1
+                next
+            }
+            in_build_version && $1 == "minos" {
+                print $2
+                exit
+            }
+            in_legacy_version && $1 == "version" {
+                print $2
+                exit
+            }
+        '
+}
+
 minimum_system_version_for_architecture()
 {
     /usr/libexec/PlistBuddy \
@@ -158,6 +212,15 @@ if (( architecture_count == 2 )) &&
       -n "$x86_64_minimum_system_version" ]]; then
     architecture_label=Universal
     minimum_system_version="$arm64_minimum_system_version"
+    legacy_minimum_system_version="$(
+        /usr/libexec/PlistBuddy \
+            -c "Print :LSMinimumSystemVersion" \
+            "${application}/Contents/Info.plist" \
+            2>/dev/null ||
+            true
+    )"
+    [[ -z "$legacy_minimum_system_version" ]] ||
+        die "Universal application has an overriding LSMinimumSystemVersion: ${legacy_minimum_system_version}"
 elif (( architecture_count == 1 )); then
     architecture_label="$architectures"
     case "$architecture_label" in
@@ -170,6 +233,21 @@ elif (( architecture_count == 1 )); then
     esac
 else
     die "Expected a thin app or an arm64/x86_64 universal app; found: ${architectures}"
+fi
+
+if [[ -n "$arm64_minimum_system_version" ]]; then
+    arm64_binary_minimum="$(
+        minimum_system_version_from_binary arm64
+    )"
+    [[ "$arm64_minimum_system_version" == "$arm64_binary_minimum" ]] ||
+        die "arm64 minimum macOS differs between Info.plist (${arm64_minimum_system_version}) and the executable (${arm64_binary_minimum})."
+fi
+if [[ -n "$x86_64_minimum_system_version" ]]; then
+    x86_64_binary_minimum="$(
+        minimum_system_version_from_binary x86_64
+    )"
+    [[ "$x86_64_minimum_system_version" == "$x86_64_binary_minimum" ]] ||
+        die "x86_64 minimum macOS differs between Info.plist (${x86_64_minimum_system_version}) and the executable (${x86_64_binary_minimum})."
 fi
 
 artifact_base="RawTherapee_MacOS_${minimum_system_version}_${architecture_label}_${safe_version}"

@@ -124,6 +124,31 @@ case "$mode" in
             die "The completed application is not universal: ${architectures}"
         fi
 
+        universal_info="${universal_app}/Contents/Info.plist"
+        arm64_minimum="$(
+            /usr/libexec/PlistBuddy \
+                -c "Print :LSMinimumSystemVersionByArchitecture:arm64" \
+                "$universal_info"
+        )"
+        x86_64_minimum="$(
+            /usr/libexec/PlistBuddy \
+                -c "Print :LSMinimumSystemVersionByArchitecture:x86_64" \
+                "$universal_info"
+        )"
+        overriding_minimum="$(
+            /usr/libexec/PlistBuddy \
+                -c "Print :LSMinimumSystemVersion" \
+                "$universal_info" \
+                2>/dev/null ||
+                true
+        )"
+        [[ "$arm64_minimum" == "26.0" ]] ||
+            die "The arm64 minimum macOS is ${arm64_minimum}, not 26.0."
+        [[ "$x86_64_minimum" == "12.0" ]] ||
+            die "The x86_64 minimum macOS is ${x86_64_minimum}, not 12.0."
+        [[ -z "$overriding_minimum" ]] ||
+            die "The universal app has an overriding LSMinimumSystemVersion: ${overriding_minimum}"
+
         /usr/bin/codesign \
             --verify --deep --strict --verbose=2 \
             "$universal_app"

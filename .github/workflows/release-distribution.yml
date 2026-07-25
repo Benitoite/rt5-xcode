@@ -485,15 +485,62 @@ jobs:
               -c "Print :LSMinimumSystemVersionByArchitecture:x86_64" \
               "$application/Contents/Info.plist"
           )"
+          overriding_minimum="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :LSMinimumSystemVersion" \
+              "$application/Contents/Info.plist" \
+              2>/dev/null ||
+              true
+          )"
           printf 'Minimum macOS: arm64=%s, x86_64=%s\n' \
             "$arm64_minimum" "$x86_64_minimum"
 
+          if [[ -n "$overriding_minimum" ]]; then
+            echo "::error::The universal app has an overriding LSMinimumSystemVersion (${overriding_minimum})."
+            exit 1
+          fi
           if [[ "$arm64_minimum" != "26.0" ]]; then
             echo "::error::The arm64 component must require macOS 26 Tahoe; found ${arm64_minimum}."
             exit 1
           fi
           if [[ "$x86_64_minimum" != "12.0" ]]; then
             echo "::error::The x86_64 component must require macOS 12 Monterey; found ${x86_64_minimum}."
+            exit 1
+          fi
+
+          minimum_from_executable()
+          {
+            /usr/bin/otool -arch "$1" -l \
+              "$application/Contents/MacOS/rawtherapee-bin" |
+              /usr/bin/awk '
+                $1 == "cmd" && $2 == "LC_BUILD_VERSION" {
+                  in_build_version = 1
+                  in_legacy_version = 0
+                  next
+                }
+                $1 == "cmd" && $2 == "LC_VERSION_MIN_MACOSX" {
+                  in_build_version = 0
+                  in_legacy_version = 1
+                  next
+                }
+                in_build_version && $1 == "minos" {
+                  print $2
+                  exit
+                }
+                in_legacy_version && $1 == "version" {
+                  print $2
+                  exit
+                }
+              '
+          }
+          arm64_binary_minimum="$(minimum_from_executable arm64)"
+          x86_64_binary_minimum="$(minimum_from_executable x86_64)"
+          if [[ "$arm64_binary_minimum" != "$arm64_minimum" ]]; then
+            echo "::error::arm64 Info.plist minimum (${arm64_minimum}) differs from Mach-O (${arm64_binary_minimum})."
+            exit 1
+          fi
+          if [[ "$x86_64_binary_minimum" != "$x86_64_minimum" ]]; then
+            echo "::error::x86_64 Info.plist minimum (${x86_64_minimum}) differs from Mach-O (${x86_64_binary_minimum})."
             exit 1
           fi
 
