@@ -77,6 +77,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          if brew tap | grep -Fxq aws/tap; then
+            brew untap aws/tap
+          fi
+
           brew install \
             adwaita-icon-theme \
             automake \
@@ -99,7 +103,6 @@ jobs:
             pkgconfig \
             shared-mime-info
 
-          brew cleanup --prune=all
           df -h "$GITHUB_WORKSPACE"
 
       - name: Build the Intel application component
@@ -271,6 +274,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          if brew tap | grep -Fxq aws/tap; then
+            brew untap aws/tap
+          fi
+
           brew install \
             adwaita-icon-theme \
             automake \
@@ -296,7 +303,6 @@ jobs:
             shared-mime-info \
             simde
 
-          brew cleanup --prune=all
           df -h "$GITHUB_WORKSPACE"
 
       - name: Import the Developer ID Application identity
