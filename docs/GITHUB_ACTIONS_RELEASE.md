@@ -16,6 +16,9 @@ The arm64 component supplies the application version, resources, and system
 version in the artifact filename. `Info.plist`, the in-app
 `AboutThisBuild.txt`, and the ZIP's `About-this-build.txt` record separate
 minimum macOS versions and complete build metadata for arm64 and x86_64.
+The merge verifies the embedded source version and full Git build UUID rather
+than Xcode-generated plist version fields, which can differ across Xcode
+releases even for identical source.
 
 Both jobs verify that their selected Xcode installation supplies at least the
 macOS 26 SDK required by this project.

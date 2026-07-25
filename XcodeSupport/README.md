@@ -118,6 +118,9 @@ prefix returned by `brew --prefix`.
 `RAWTHERAPEE_UNIVERSAL_COUNTERPART_APP` is reserved for this second-stage
 arm64 build. It must point to a thin x86_64 `RawTherapee.app`. The four
 RawTherapee executables must exist in both components and become universal.
+The embedded source version and full Git build UUID must match. Plist version
+fields may differ because older and newer Xcode releases process generated
+plists at different points; the arm64 plist supplies the final app metadata.
 Homebrew dependencies may differ between runner images: matching paths are
 merged, architecture-specific paths are retained as thin files, and the merge
 fails if a dependency required by either architecture is absent or has the

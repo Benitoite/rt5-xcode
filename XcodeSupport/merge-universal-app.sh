@@ -74,17 +74,39 @@ plist_value()
     "$plist_buddy" -c "Print :$2" "$1" 2>/dev/null || true
 }
 
-for version_key in \
-    CFBundleIdentifier \
-    CFBundleShortVersionString \
-    CFBundleVersion
+arm64_bundle_identifier="$(
+    plist_value "$arm64_info" CFBundleIdentifier
+)"
+x86_64_bundle_identifier="$(
+    plist_value "$x86_64_info" CFBundleIdentifier
+)"
+[[ -n "$arm64_bundle_identifier" && -n "$x86_64_bundle_identifier" ]] ||
+    die "CFBundleIdentifier is missing from a component."
+[[ "$arm64_bundle_identifier" == "$x86_64_bundle_identifier" ]] ||
+    die "CFBundleIdentifier differs between components: arm64=${arm64_bundle_identifier}, x86_64=${x86_64_bundle_identifier}"
+
+about_value()
+{
+    /usr/bin/awk -v key="$2" '
+        index($0, key ":") == 1 {
+            value = substr($0, length(key) + 2)
+            sub(/^[[:space:]]*/, "", value)
+            print value
+            exit
+        }
+    ' "$1"
+}
+
+for source_key in \
+    Version \
+    "Build UUID"
 do
-    arm64_value="$(plist_value "$arm64_info" "$version_key")"
-    x86_64_value="$(plist_value "$x86_64_info" "$version_key")"
-    if [[ -n "$arm64_value" && -n "$x86_64_value" &&
-          "$arm64_value" != "$x86_64_value" ]]; then
-        die "${version_key} differs between components: arm64=${arm64_value}, x86_64=${x86_64_value}"
-    fi
+    arm64_value="$(about_value "$arm64_about" "$source_key")"
+    x86_64_value="$(about_value "$x86_64_about" "$source_key")"
+    [[ -n "$arm64_value" && -n "$x86_64_value" ]] ||
+        die "${source_key} is missing from a component's AboutThisBuild.txt."
+    [[ "$arm64_value" == "$x86_64_value" ]] ||
+        die "${source_key} differs between components: arm64=${arm64_value}, x86_64=${x86_64_value}"
 done
 
 minimum_macos_from_binary()
