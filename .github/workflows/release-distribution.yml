@@ -16,7 +16,8 @@ concurrency:
 jobs:
   intel-component:
     name: Build the Intel x86_64 component
-    runs-on: macos-26-intel
+    # Plain macos-14 is arm64; -large is GitHub's Intel Sonoma image.
+    runs-on: macos-14-large
     timeout-minutes: 240
 
     env:
@@ -58,17 +59,18 @@ jobs:
           set -euo pipefail
           sw_vers
           xcodebuild -version
+          macos_version="$(sw_vers -productVersion)"
           sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
           printf 'macOS SDK: %s\n' "$sdk_version"
           uname -m
           df -h "$GITHUB_WORKSPACE"
 
-          if [[ "$(uname -m)" != "x86_64" ]]; then
-            echo "::error::The Intel component must run on x86_64."
+          if [[ "${macos_version%%.*}" != "14" ]]; then
+            echo "::error::The Intel component must run on macOS 14 Sonoma."
             exit 1
           fi
-          if (( ${sdk_version%%.*} < 26 )); then
-            echo "::error::The Intel runner does not provide the required macOS 26 SDK."
+          if [[ "$(uname -m)" != "x86_64" ]]; then
+            echo "::error::The Intel component must run on x86_64."
             exit 1
           fi
 
