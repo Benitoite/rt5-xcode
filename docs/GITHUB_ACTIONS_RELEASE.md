@@ -3,11 +3,12 @@
 The `Signed and notarized distribution` workflow creates one universal
 RawTherapee distribution in two ordered native jobs:
 
-1. `macos-26-intel` builds a thin x86_64 app and transfers it to the next job
-   through the Actions cache. It is not uploaded as a workflow artifact.
-2. `macos-26` builds the arm64 app, merges every matching Mach-O with the Intel
-   countercomponent, signs and notarizes the universal app, and directly uploads
-   the single universal distribution ZIP.
+1. `macos-26-intel` builds a thin x86_64 app targeting macOS 12 Monterey and
+   transfers it to the next job through the Actions cache. It is not uploaded
+   as a workflow artifact.
+2. `macos-26` builds the arm64 app targeting macOS 26 Tahoe, merges every
+   matching Mach-O with the Intel countercomponent, signs and notarizes the
+   universal app, and directly uploads the single universal distribution ZIP.
 
 The arm64 component supplies the application version, resources, and system
 version in the artifact filename. `Info.plist`, the in-app
@@ -188,7 +189,7 @@ RawTherapee_MacOS_<arm64-minimum-macOS>_Universal_<RawTherapee-version>.zip
 For example:
 
 ```text
-RawTherapee_MacOS_12.0_Universal_5.13-rc1-34-g71c625fe7.zip
+RawTherapee_MacOS_26.0_Universal_5.13-rc1-34-g71c625fe7.zip
 ```
 
 The ZIP contains exactly four files at its root:

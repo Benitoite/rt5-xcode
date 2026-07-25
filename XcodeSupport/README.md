@@ -99,8 +99,10 @@ prefix returned by `brew --prefix`.
   Developer ID Application identity installed for the current developer.
 - Distribution enables App Sandbox using the same broad filesystem exception
   used by RawTherapee's upstream macOS bundle.
-- The deployment target is macOS 12. Dependencies must also be built for
-  macOS 12 or an earlier deployment target.
+- Local builds default to a macOS 12 deployment target. Dependencies must also
+  be built for macOS 12 or an earlier deployment target.
+- The universal release workflow targets macOS 12 Monterey for x86_64 and
+  macOS 26 Tahoe for arm64.
 - Local builds use the Mac's active architecture because Homebrew packages are
   architecture-specific. Homebrew is discovered through `brew --prefix`, which
   supports the usual `/opt/homebrew` Apple Silicon and `/usr/local` Intel

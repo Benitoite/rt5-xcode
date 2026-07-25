@@ -114,6 +114,7 @@ jobs:
             -destination "generic/platform=macOS" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
             ARCHS=x86_64 \
+            MACOSX_DEPLOYMENT_TARGET=12.0 \
             ONLY_ACTIVE_ARCH=YES \
             build |
             tee "$RUNNER_TEMP/xcodebuild-intel.log"
@@ -402,6 +403,7 @@ jobs:
             -destination "generic/platform=macOS" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
             ARCHS=arm64 \
+            MACOSX_DEPLOYMENT_TARGET=26.0 \
             ONLY_ACTIVE_ARCH=YES \
             RAWTHERAPEE_UNIVERSAL_COUNTERPART_APP="$intel_app" \
             build |
@@ -447,6 +449,15 @@ jobs:
           )"
           printf 'Minimum macOS: arm64=%s, x86_64=%s\n' \
             "$arm64_minimum" "$x86_64_minimum"
+
+          if [[ "$arm64_minimum" != "26.0" ]]; then
+            echo "::error::The arm64 component must require macOS 26 Tahoe; found ${arm64_minimum}."
+            exit 1
+          fi
+          if [[ "$x86_64_minimum" != "12.0" ]]; then
+            echo "::error::The x86_64 component must require macOS 12 Monterey; found ${x86_64_minimum}."
+            exit 1
+          fi
 
           zip_artifacts=(dist/*.zip)
           if (( ${#zip_artifacts[@]} != 1 )); then
