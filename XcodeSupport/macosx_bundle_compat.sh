@@ -299,7 +299,24 @@ resolve_file "$lensfun_library_name" \
     "${LOCAL_PREFIX}/lib/${lensfun_library_name}" \
     "${lensfun_libdir}/${lensfun_library_name}"
 lensfun_library="$RESOLVED_FILE"
-copy_tree "$lensfun_data_dir" "${RESOURCES}/share/lensfun"
+lensfun_bundle_data_dir="${RESOURCES}/share/lensfun"
+copy_tree_dereference "$lensfun_data_dir" "$lensfun_bundle_data_dir"
+
+# A successful directory copy is not sufficient here: without XML profiles,
+# Profiled Lens Correction starts but has no cameras or lenses to offer.
+lensfun_profile_count=0
+for lensfun_profile in "$lensfun_bundle_data_dir"/*.xml; do
+    [[ -f "$lensfun_profile" ]] || continue
+    ((lensfun_profile_count += 1))
+done
+((lensfun_profile_count > 0)) ||
+    die "No Lensfun XML profiles copied from ${lensfun_data_dir}"
+
+lensfun_data_symlink="$(find "$lensfun_bundle_data_dir" -type l -print -quit)"
+[[ -z "$lensfun_data_symlink" ]] ||
+    die "Lensfun database contains a symbolic link: ${lensfun_data_symlink}"
+
+msg "Installed ${lensfun_profile_count} Lensfun XML profiles from ${lensfun_data_dir}."
 copy_macho "$lensfun_library" "${LIB}/${lensfun_library_name}"
 
 # libomp can be directly linked, nested under lib/ by MacPorts, or keg-only

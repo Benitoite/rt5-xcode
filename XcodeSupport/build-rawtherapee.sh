@@ -158,6 +158,10 @@ openmp_flags="-arch ${architecture} -Xpreprocessor -fopenmp -I${homebrew_prefix}
 compiler_flags="-arch ${architecture} -Wno-pass-failed -Wno-deprecated-register -Wno-unused-command-line-argument"
 linker_flags="-L${homebrew_prefix}/lib -Wl,-rpath,${homebrew_prefix}/lib -L${homebrew_prefix}/opt/gdk-pixbuf/lib -L${homebrew_prefix}/opt/libomp/lib -L${homebrew_prefix}/opt/expat/lib"
 
+# RawTherapee resolves LENSFUNDBDIR relative to DATA_SEARCH_PATH. The generated
+# config below makes DATA_SEARCH_PATH ../Resources/share relative to the real
+# executable, so the bundled database is its lensfun child—not another copy of
+# ../Resources/share.
 log "configuring the CMake source graph with the Xcode generator"
 cmake \
     -S "$source_directory" \
@@ -184,7 +188,7 @@ cmake \
     -DWITH_SYSTEM_FMT=ON \
     -DWITH_LTO="$link_time_optimization" \
     -DOSX_DEV_BUILD=ON \
-    -DLENSFUNDBDIR=../Resources/share/lensfun \
+    -DLENSFUNDBDIR=lensfun \
     -DCODESIGNID:STRING=- \
     -DFANCY_DMG=OFF \
     -DBUNDLE_BASE_INSTALL_DIR="${stage_directory}/MacOS" \
@@ -231,9 +235,11 @@ compatibility_bundle_script="${support_directory}/macosx_bundle_compat.sh"
 bundle_script_source="$upstream_bundle_script"
 
 # RawTherapee releases before the portable Homebrew bundler can preserve
-# package-manager symlinks and omit keg-only libraries. Use the integration's
-# compatibility copy for those revisions without changing the submodule.
-if ! /usr/bin/grep -q 'copy_tree_dereference' "$upstream_bundle_script"; then
+# package-manager symlinks and omit keg-only libraries. A generic dereference
+# helper is insufficient: the Lensfun database copy must actually use it.
+# Use the integration's compatibility copy for older revisions without
+# changing the submodule.
+if ! /usr/bin/grep -q 'lensfun_bundle_data_dir' "$upstream_bundle_script"; then
     [[ -f "$compatibility_bundle_script" ]] ||
         die "The macOS compatibility bundle script is missing."
     log "using the Xcode compatibility bundle script for this RawTherapee revision"
