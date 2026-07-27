@@ -66,7 +66,7 @@ open -a rawtherapee
 # Method 2: Build for Distribution outside the App Store
 Apple® Developers may also choose to build a distributable package using this method.
 
-## Prepare the build environment [as above](https://github.com/Benitoite/rt5-xcode/edit/follow-dev/README.md#prepare-the-build-environment)
+## Prepare the build environment [as above](https://github.com/Benitoite/rt5-xcode/main/README.md#prepare-the-build-environment)
 
 ## Setup Notary Services
 ### Run this command with your details (you will be prompted for your Apple® App-Specific Password)
@@ -130,7 +130,7 @@ sudo /usr/bin/ditto \
 
 # Method 3: Build a universal distribution on two Macs
 
-## Prepare the build environment [as above](https://github.com/Benitoite/rt5-xcode/edit/follow-dev/README.md#prepare-the-build-environment)
+## Prepare the build environment [as above](https://github.com/Benitoite/rt5-xcode/main/README.md#prepare-the-build-environment)
 
 Use the same repository commit on both Macs. Only the arm64 Mac needs the
 signing and notarization setup from Method 2.
