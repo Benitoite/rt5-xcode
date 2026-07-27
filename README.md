@@ -66,7 +66,7 @@ open -a rawtherapee
 # Method 2: Build for Distribution outside the App Store
 Apple® Developers may also choose to build a distributable package using this method.
 
-## Prepare the build environment [as above](#prepare-the-build-environment:)
+## Prepare the build environment [as above](#prepare-the-build-environment)
 
 ## Setup Notary Services
 ### Run this command with your details (you will be prompted for your Apple® App-Specific Password)
