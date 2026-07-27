@@ -1,0 +1,62 @@
+name: Follow RawTherapee dev
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: follow-rawtherapee-dev
+  cancel-in-progress: false
+
+jobs:
+  update-submodule:
+    name: Update the follow-dev gitlink
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out follow-dev
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: follow-dev
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Advance RawTherapee to upstream dev
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          submodule_path="RawTherapee5/rawtherapee"
+          tracked_branch="$(
+            git config -f .gitmodules \
+              --get submodule.RawTherapee5/rawtherapee.branch
+          )"
+          if [[ "$tracked_branch" != "dev" ]]; then
+            echo "::error::${submodule_path} is configured to track ${tracked_branch:-nothing}, not dev."
+            exit 1
+          fi
+
+          previous_revision="$(git -C "$submodule_path" rev-parse HEAD)"
+          git submodule update \
+            --init \
+            --remote \
+            --checkout \
+            --recursive \
+            "$submodule_path"
+          current_revision="$(git -C "$submodule_path" rev-parse HEAD)"
+
+          if [[ "$current_revision" == "$previous_revision" ]]; then
+            echo "RawTherapee dev is already current at ${current_revision}."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$submodule_path"
+          git commit \
+            -m "Update RawTherapee dev to ${current_revision:0:12}"
+          git push origin HEAD:follow-dev
