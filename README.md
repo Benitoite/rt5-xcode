@@ -20,6 +20,14 @@ git clone https://github.com/benitoite/rt5-xcode.git && \
 cd rt5-xcode && \
 git submodule update --init --recursive 
 ```
+### Or, if you want to build from `dev` use the `follow-dev` branch:
+```zsh
+git clone https://github.com/benitoite/rt5-xcode.git && \
+cd rt5-xcode && \
+git switch follow-dev && \
+git pull --ff-only && \
+git submodule update --init --recursive
+```
 
 ## Ad-hoc build to run on your local machine:
 
@@ -58,12 +66,7 @@ open -a rawtherapee
 # Method 2: Build for Distribution outside the App Store
 Apple® Developers may also choose to build a distributable package using this method.
 
-## Prepare the build environment:
-```zsh
-git clone https://github.com/benitoite/rt5-xcode.git && \
-cd rt5-xcode && \
-git submodule update --init --recursive 
-```
+## Prepare the build environment [as above](https://github.com/Benitoite/rt5-xcode/edit/follow-dev/README.md#prepare-the-build-environment)
 
 ## Setup Notary Services
 ### Run this command with your details (you will be prompted for your Apple® App-Specific Password)
@@ -127,10 +130,12 @@ sudo /usr/bin/ditto \
 
 # Method 3: Build a universal distribution on two Macs
 
+## Prepare the build environment [as above](https://github.com/Benitoite/rt5-xcode/edit/follow-dev/README.md#prepare-the-build-environment)
+
 Use the same repository commit on both Macs. Only the arm64 Mac needs the
 signing and notarization setup from Method 2.
 
-## 1. On the Intel Monterey Mac
+## 1. On the Intel Mac
 
 ```zsh
 ./XcodeSupport/two-mac-universal.sh intel
@@ -138,7 +143,7 @@ signing and notarization setup from Method 2.
 
 Wait for the ZIP to finish syncing through iCloud Drive.
 
-## 2. On the arm64 Tahoe Mac
+## 2. On the arm64 Mac
 
 ```zsh
 ./XcodeSupport/two-mac-universal.sh arm
